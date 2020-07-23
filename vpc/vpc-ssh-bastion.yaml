@@ -32,6 +32,7 @@ Metadata:
       - SystemsManagerAccess
       - LogsRetentionInDays
       - SubDomainNameWithDot
+      - ManagedPolicyArns
 Parameters:
   ParentVPCStack:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
@@ -75,46 +76,59 @@ Parameters:
     Description: 'Name that is used to create the DNS entry with trailing dot, e.g. §{SubDomainNameWithDot}§{HostedZoneName}. Leave blank for naked (or apex and bare) domain. Requires ParentZoneStack parameter!'
     Type: String
     Default: 'ssh.'
+  ManagedPolicyArns:
+    Description: 'Optional comma-delimited list of IAM managed policy ARNs to attach to the instance''s IAM role'
+    Type: String
+    Default: ''
 Mappings:
   RegionMap:
-    'ap-south-1':
-      AMI: 'ami-0937dcc711d38ef3f'
-    'eu-west-3':
-      AMI: 'ami-0854d53ce963f69d8'
+    'af-south-1':
+      AMI: 'ami-0ec47ddb564d75b64'
     'eu-north-1':
-      AMI: 'ami-6d27a913'
+      AMI: 'ami-04697c9bb5d6135a2'
+    'ap-south-1':
+      AMI: 'ami-0447a12f28fddb066'
+    'eu-west-3':
+      AMI: 'ami-01c72e187b357583b'
     'eu-west-2':
-      AMI: 'ami-0664a710233d7c148'
+      AMI: 'ami-032598fcc7e9d1c7a'
+    'eu-south-1':
+      AMI: 'ami-0f9b9a8cf93d838d0'
     'eu-west-1':
-      AMI: 'ami-0fad7378adf284ce0'
+      AMI: 'ami-0ea3405d2d2522162'
     'ap-northeast-2':
-      AMI: 'ami-018a9a930060d38aa'
+      AMI: 'ami-01af223aa7f274198'
+    'me-south-1':
+      AMI: 'ami-01b31491b74045c0c'
     'ap-northeast-1':
-      AMI: 'ami-0d7ed3ddb85b521a6'
+      AMI: 'ami-0a1c2ec61571737db'
     'sa-east-1':
-      AMI: 'ami-0b04450959586da29'
+      AMI: 'ami-0477a95397a9154b3'
     'ca-central-1':
-      AMI: 'ami-0de8b8e4bc1f125fe'
+      AMI: 'ami-0f75c2980c6a5851d'
+    'ap-east-1':
+      AMI: 'ami-49bbfa38'
     'ap-southeast-1':
-      AMI: 'ami-04677bdaa3c2b6e24'
+      AMI: 'ami-0615132a0f36d24f4'
     'ap-southeast-2':
-      AMI: 'ami-0c9d48b5db609ad6e'
+      AMI: 'ami-088ff0e3bde7b3fdf'
     'eu-central-1':
-      AMI: 'ami-0eaec5838478eb0ba'
+      AMI: 'ami-0a02ee601d742e89f'
     'us-east-1':
-      AMI: 'ami-035be7bafff33b6b6'
+      AMI: 'ami-09d95fab7fff3776c'
     'us-east-2':
-      AMI: 'ami-04328208f4f0cf1fe'
+      AMI: 'ami-026dea5602e368e96'
     'us-west-1':
-      AMI: 'ami-0799ad445b5727125'
+      AMI: 'ami-04e59c05167ea7bd5'
     'us-west-2':
-      AMI: 'ami-032509850cf9ee54e'
+      AMI: 'ami-0e34e7b9ca0ace12d'
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasIAMUserSSHAccess: !Equals [!Ref IAMUserSSHAccess, 'true']
   HasSystemsManagerAccess: !Equals [!Ref SystemsManagerAccess, 'true']
   HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
   HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
+  HasManagedPolicyArns: !Not [!Equals [!Ref ManagedPolicyArns, '']]
 Resources:
   RecordSet:
     Condition: HasZone
@@ -127,7 +141,7 @@ Resources:
         HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
       ResourceRecords:
       - !Ref EIP
-      TTL: '60'
+      TTL: 60
       Type: A
   EIP:
     Type: 'AWS::EC2::EIP'
@@ -150,7 +164,6 @@ Resources:
   InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      Path: '/'
       Roles:
       - !Ref IAMRole
   IAMRole:
@@ -161,13 +174,23 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - 'ec2.amazonaws.com'
-          Action:
-          - 'sts:AssumeRole'
-      Path: '/'
-      ManagedPolicyArns: !If [HasSystemsManagerAccess, ['arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'], []] # TODO get rid of managed policy
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns: !If [HasManagedPolicyArns, !Split [',', !Ref ManagedPolicyArns], !Ref 'AWS::NoValue']
       Policies:
+      - !If
+        - HasSystemsManagerAccess
+        - PolicyName: ssm
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              Resource: '*'
+        - !Ref 'AWS::NoValue'
       - PolicyName: 'ec2'
         PolicyDocument:
           Version: '2012-10-17'
@@ -183,6 +206,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
+            - 'logs:CreateLogGroup'
             - 'logs:CreateLogStream'
             - 'logs:PutLogEvents'
             - 'logs:DescribeLogStreams'

@@ -33,6 +33,13 @@ Metadata:
       - IAMUserSSHAccess
       - SystemsManagerAccess
       - SubDomainNameWithDot
+      - ManagedPolicyArns
+    - Label:
+        default: 'EFS Parameters'
+      Parameters:
+      - EFSProvisionedThroughputInMibps
+      - EFSBackupRetentionPeriod
+      - EFSBackupScheduleExpression
     - Label:
         default: 'Master Parameters'
       Parameters:
@@ -51,7 +58,6 @@ Metadata:
       - AgentVolumeSize
       - AgentMaxSize
       - AgentMinSize
-      - AgentDesiredCapacity
       - AgentMaxBuildWaitTimeInSeconds
       - AgentLogsRetentionInDays
 Parameters:
@@ -168,12 +174,6 @@ Parameters:
     Default: 0
     ConstraintDescription: 'Must be >= 0'
     MinValue: 0
-  AgentDesiredCapacity:
-    Description: 'Deprecated in v9, will be removed in v11, use `AgentMinSize` instead!'
-    Type: Number
-    Default: 0
-    ConstraintDescription: 'Must be >= 0'
-    MinValue: 0
   AgentMaxBuildWaitTimeInSeconds:
     Description: 'Maximum time in seconds an agent can continue with a build although it should be scaled down.'
     Type: Number
@@ -190,40 +190,66 @@ Parameters:
     Description: 'Name that is used to create the DNS entry with trailing dot, e.g. §{SubDomainNameWithDot}§{HostedZoneName}. Leave blank for naked (or apex and bare) domain. Requires ParentZoneStack parameter!'
     Type: String
     Default: 'jenkins.'
+  ManagedPolicyArns:
+    Description: 'Optional comma-delimited list of IAM managed policy ARNs to attach to the instance''s IAM role'
+    Type: String
+    Default: ''
+  EFSProvisionedThroughputInMibps:
+    Description: 'The provisioned throughput for the Elastic File System (EFS) in Mibps. Default is 0 which enables the bursting mode and disables provisioned throughput.'
+    Type: Number
+    Default: 0
+  EFSBackupRetentionPeriod:
+    Description: 'The number of days to keep backups of the EFS file system (set to 0 to disable).'
+    Type: Number
+    MinValue: 0
+    MaxValue: 35
+    Default: 30
+  EFSBackupScheduleExpression:
+    Description: 'A CRON expression specifying when AWS Backup initiates a backup job.'
+    Type: String
+    Default: 'cron(0 5 ? * * *)'
 Mappings:
   RegionMap:
-    'ap-south-1':
-      AMI: 'ami-0937dcc711d38ef3f'
-    'eu-west-3':
-      AMI: 'ami-0854d53ce963f69d8'
+    'af-south-1':
+      AMI: 'ami-0ec47ddb564d75b64'
     'eu-north-1':
-      AMI: 'ami-6d27a913'
+      AMI: 'ami-04697c9bb5d6135a2'
+    'ap-south-1':
+      AMI: 'ami-0447a12f28fddb066'
+    'eu-west-3':
+      AMI: 'ami-01c72e187b357583b'
     'eu-west-2':
-      AMI: 'ami-0664a710233d7c148'
+      AMI: 'ami-032598fcc7e9d1c7a'
+    'eu-south-1':
+      AMI: 'ami-0f9b9a8cf93d838d0'
     'eu-west-1':
-      AMI: 'ami-0fad7378adf284ce0'
+      AMI: 'ami-0ea3405d2d2522162'
     'ap-northeast-2':
-      AMI: 'ami-018a9a930060d38aa'
+      AMI: 'ami-01af223aa7f274198'
+    'me-south-1':
+      AMI: 'ami-01b31491b74045c0c'
     'ap-northeast-1':
-      AMI: 'ami-0d7ed3ddb85b521a6'
+      AMI: 'ami-0a1c2ec61571737db'
     'sa-east-1':
-      AMI: 'ami-0b04450959586da29'
+      AMI: 'ami-0477a95397a9154b3'
     'ca-central-1':
-      AMI: 'ami-0de8b8e4bc1f125fe'
+      AMI: 'ami-0f75c2980c6a5851d'
+    'ap-east-1':
+      AMI: 'ami-49bbfa38'
     'ap-southeast-1':
-      AMI: 'ami-04677bdaa3c2b6e24'
+      AMI: 'ami-0615132a0f36d24f4'
     'ap-southeast-2':
-      AMI: 'ami-0c9d48b5db609ad6e'
+      AMI: 'ami-088ff0e3bde7b3fdf'
     'eu-central-1':
-      AMI: 'ami-0eaec5838478eb0ba'
+      AMI: 'ami-0a02ee601d742e89f'
     'us-east-1':
-      AMI: 'ami-035be7bafff33b6b6'
+      AMI: 'ami-09d95fab7fff3776c'
     'us-east-2':
-      AMI: 'ami-04328208f4f0cf1fe'
+      AMI: 'ami-026dea5602e368e96'
     'us-west-1':
-      AMI: 'ami-0799ad445b5727125'
+      AMI: 'ami-04e59c05167ea7bd5'
     'us-west-2':
-      AMI: 'ami-032509850cf9ee54e'
+      AMI: 'ami-0e34e7b9ca0ace12d'
 Conditions:
   HasZeroAgents: !Equals [!Ref AgentMinSize, '0']
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
@@ -233,10 +259,18 @@ Conditions:
   HasNotSSHBastionSecurityGroup: !Equals [!Ref ParentSSHBastionStack, '']
   HasAuthProxySecurityGroup: !Not [!Equals [!Ref ParentAuthProxyStack, '']]
   HasNotAuthProxySecurityGroup: !Equals [!Ref ParentAuthProxyStack, '']
+  HasMasterELBSchemeInternetFacing: !Equals [!Ref MasterELBScheme, 'internet-facing']
   HasMasterELBSchemeInternal: !Equals [!Ref MasterELBScheme, 'internal']
   HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
   HasS3Bucket: !Not [!Equals [!Ref ParentS3StackAccessLog, '']]
   HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
+  HasZoneAndMasterELBSchemeInternetFacing: !And [!Condition HasZone, !Condition HasMasterELBSchemeInternetFacing]
+  HasManagedPolicyArns: !Not [!Equals [!Ref ManagedPolicyArns, '']]
+  HasEFSProvisionedThroughput: !Not [!Condition HasNotEFSProvisionedThroughput]
+  HasNotEFSProvisionedThroughput: !Equals [!Ref EFSProvisionedThroughputInMibps, '0']
+  HasAlertTopicAndEFSProvisionedThroughput: !And [!Condition HasAlertTopic, !Condition HasEFSProvisionedThroughput]
+  HasAlertTopicAndNotEFSProvisionedThroughput: !And [!Condition HasAlertTopic, !Condition HasNotEFSProvisionedThroughput]
+  HasEFSBackupRetentionPeriod: !Not [!Equals [!Ref EFSBackupRetentionPeriod, 0]]
 Resources:
   MasterStorageSG:
     Type: 'AWS::EC2::SecurityGroup'
@@ -251,39 +285,58 @@ Resources:
   MasterStorage:
     Type: 'AWS::EFS::FileSystem'
     Properties:
+      ThroughputMode: !If [HasEFSProvisionedThroughput, 'provisioned', 'bursting']
+      ProvisionedThroughputInMibps: !If [HasEFSProvisionedThroughput, !Ref EFSProvisionedThroughputInMibps, !Ref 'AWS::NoValue']
       FileSystemTags:
       - Key: Name
         Value: 'jenkins-master-storage'
       PerformanceMode: generalPurpose
-  MasterStoragePercentIOLimitTooHighAlarm:
-    Condition: HasAlertTopic
-    Type: 'AWS::CloudWatch::Alarm'
-    Properties:
-      AlarmDescription: 'Average IO utilization over last 10 minutes higher than 80%'
-      Namespace: 'AWS/EFS'
-      MetricName: PercentIOLimit
-      Statistic: Average
-      Period: 600
-      EvaluationPeriods: 1
-      ComparisonOperator: GreaterThanThreshold
-      Threshold: 80
-      AlarmActions:
-      - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
-      Dimensions:
-      - Name: FileSystemId
-        Value: !Ref MasterStorage
   MasterStorageBurstCreditBalanceTooLowAlarm:
-    Condition: HasAlertTopic
+    Condition: HasAlertTopicAndNotEFSProvisionedThroughput
     Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmDescription: 'EFS file system is running out of burst credits. You can expect a significant performance drop in the next hour.'
+      AlarmDescription: 'Average burst credit balance over last 10 minutes too low, expect a significant performance drop soon.'
       Namespace: 'AWS/EFS'
       MetricName: BurstCreditBalance
       Statistic: Average
       Period: 600
       EvaluationPeriods: 1
       ComparisonOperator: LessThanThreshold
-      Threshold: 192416666667 # 192 GB in Bytes (last hour where you can burst at 100 MB/sec)
+      Threshold: 192000000000 # 192 GB in Bytes (last hour where you can burst at 100 MB/sec)
+      AlarmActions:
+      - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
+      Dimensions:
+      - Name: FileSystemId
+        Value: !Ref MasterStorage
+  MasterStoragePercentIOLimitTooHighAlarm:
+    Condition: HasAlertTopicAndNotEFSProvisionedThroughput
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: 'I/O limit has been reached, consider using Max I/O performance mode.'
+      Namespace: 'AWS/EFS'
+      MetricName: PercentIOLimit
+      Statistic: Maximum
+      Period: 600
+      EvaluationPeriods: 3
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 95
+      AlarmActions:
+      - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
+      Dimensions:
+      - Name: FileSystemId
+        Value: !Ref MasterStorage
+  MasterStorageThroughputAlarm:
+    Condition: HasAlertTopicAndEFSProvisionedThroughput
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: 'Reached 90% of the provisioned throughput over last 10 minutes.'
+      Namespace: 'AWS/EFS'
+      MetricName: TotalIOBytes
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: !GetAtt MaxThroughputCalculator.Threshold
       AlarmActions:
       - {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}
       Dimensions:
@@ -317,6 +370,15 @@ Resources:
       FromPort: 80
       ToPort: 80
       CidrIp: '0.0.0.0/0'
+  MasterELBSGInWorldIPv6:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Condition: HasNotAuthProxySecurityGroup
+    Properties:
+      GroupId: !Ref MasterELBSG
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIpv6: '::/0'
   MasterELBSGInAuthProxy:
     Type: 'AWS::EC2::SecurityGroupIngress'
     Condition: HasAuthProxySecurityGroup
@@ -343,6 +405,7 @@ Resources:
       Dimensions:
       - Name: LoadBalancer
         Value: !GetAtt MasterELB.LoadBalancerFullName
+      TreatMissingData: notBreaching
   MasterHTTPCodeTarget5XXTooHighAlarm:
     Condition: HasAlertTopic
     Type: 'AWS::CloudWatch::Alarm'
@@ -360,6 +423,7 @@ Resources:
       Dimensions:
       - Name: LoadBalancer
         Value: !GetAtt MasterELB.LoadBalancerFullName
+      TreatMissingData: notBreaching
   MasterRejectedConnectionCountTooHighAlarm:
     Condition: HasAlertTopic
     Type: 'AWS::CloudWatch::Alarm'
@@ -377,6 +441,7 @@ Resources:
       Dimensions:
       - Name: LoadBalancer
         Value: !GetAtt MasterELB.LoadBalancerFullName
+      TreatMissingData: notBreaching
   MasterTargetConnectionErrorCountTooHighAlarm:
     Condition: HasAlertTopic
     Type: 'AWS::CloudWatch::Alarm'
@@ -394,6 +459,7 @@ Resources:
       Dimensions:
       - Name: LoadBalancer
         Value: !GetAtt MasterELB.LoadBalancerFullName
+      TreatMissingData: notBreaching
   RecordSet:
     Condition: HasZone
     Type: 'AWS::Route53::RecordSet'
@@ -407,9 +473,23 @@ Resources:
       - SubDomainNameWithDot: !Ref SubDomainNameWithDot
         HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
       Type: A
+  RecordSetIPv6:
+    Condition: HasZoneAndMasterELBSchemeInternetFacing
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      AliasTarget:
+        HostedZoneId: !GetAtt 'MasterELB.CanonicalHostedZoneID'
+        DNSName: !GetAtt 'MasterELB.DNSName'
+      HostedZoneId: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'}
+      Name: !Sub
+      - '${SubDomainNameWithDot}${HostedZoneName}'
+      - SubDomainNameWithDot: !Ref SubDomainNameWithDot
+        HostedZoneName: {'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'}
+      Type: AAAA
   MasterELB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
+      IpAddressType: !If [HasMasterELBSchemeInternal, 'ipv4', 'dualstack']
       LoadBalancerAttributes:
       - Key: 'idle_timeout.timeout_seconds'
         Value: !Ref MasterLoadBalancerIdleTimeout
@@ -464,7 +544,6 @@ Resources:
   MasterIP:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      Path: '/'
       Roles:
       - !Ref MasterIAMRole
   MasterIAMRole:
@@ -475,13 +554,23 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - 'ec2.amazonaws.com'
-          Action:
-          - 'sts:AssumeRole'
-      Path: '/'
-      ManagedPolicyArns: !If [HasSystemsManagerAccess, ['arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'], []] # TODO get rid of managed policy
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      ManagedPolicyArns: !If [HasManagedPolicyArns, !Split [',', !Ref ManagedPolicyArns], !Ref 'AWS::NoValue']
       Policies:
+      - !If
+        - HasSystemsManagerAccess
+        - PolicyName: ssm
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              Resource: '*'
+        - !Ref 'AWS::NoValue'
       - PolicyName: cloudwatch
         PolicyDocument:
           Version: '2012-10-17'
@@ -515,6 +604,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
+            - 'logs:CreateLogGroup'
             - 'logs:CreateLogStream'
             - 'logs:PutLogEvents'
             - 'logs:DescribeLogStreams'
@@ -524,10 +614,8 @@ Resources:
           Version: '2012-10-17'
           Statement:
           - Effect: Allow
-            Action:
-            - 'sts:AssumeRole'
-            Resource:
-            - '*'
+            Action: 'sts:AssumeRole'
+            Resource: '*'
   MasterIAMPolicySSHAccess:
     Type: 'AWS::IAM::Policy'
     Condition: HasIAMUserSSHAccess
@@ -594,7 +682,7 @@ Resources:
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
-          default: !If [HasIAMUserSSHAccess, [awslogs, ssh-access, mount, extras, install, setup, custom, run], [awslogs, mount, extras, install, setup, custom, run]]
+          default: [awslogs, !If [HasIAMUserSSHAccess, ssh-access, !Ref 'AWS::NoValue'], mount, extras, install, setup, custom_before, run, custom_after]
         awslogs:
           packages:
             yum:
@@ -801,6 +889,20 @@ Resources:
                 commands:
                 - 'a_configure_sshd_command'
                 - 'b_configure_sshd_commanduser'
+        mount:
+          packages:
+            yum:
+              'amazon-efs-utils': []
+          commands:
+            'a_groupadd':
+              command: 'groupadd -g 497 jenkins'
+              test: 'if grep -q jenkins: /etc/group; then exit 1; else exit 0; fi'
+            'b_useradd':
+              command: 'adduser -u 498 -g 497 -s /bin/false -d /var/lib/jenkins -M -c ''Jenkins Continuous Integration Server'' jenkins'
+              test: 'if grep -q jenkins: /etc/passwd; then exit 1; else exit 0; fi'
+            'c_mount':
+              command: !Sub 'mkdir /var/lib/jenkins && chown -R jenkins:jenkins /var/lib/jenkins && echo "${MasterStorage}:/ /var/lib/jenkins efs tls,_netdev 0 0" >> /etc/fstab && mount -a -t efs'
+              test: '[ ! -d /var/lib/jenkins ]'
         extras:
           commands:
             'a_enable_docker':
@@ -809,34 +911,17 @@ Resources:
             'b_enable_corretto8':
               command: 'amazon-linux-extras enable corretto8'
               test: "! grep -Fxq '[amzn2extra-corretto8]' /etc/yum.repos.d/amzn2-extras.repo"
-        mount:
+        install:
           packages:
+            rpm:
+              jenkins: 'https://pkg.jenkins.io/redhat-stable/jenkins-2.235.2-1.1.noarch.rpm'
             yum:
-              'nfs-utils': []
+              'java-1.8.0-amazon-corretto': []
               'ruby': []
             rubygems:
               'aws-sdk-autoscaling': ['1.13.0']
               'aws-sdk-sqs': ['1.10.0']
               daemons: ['1.2.6']
-          commands:
-            'a_groupadd':
-              command: 'groupadd -g 497 jenkins'
-              test: 'if grep -q jenkins: /etc/group; then exit 1; else exit 0; fi'
-            'b_useradd':
-              command: 'adduser -u 498 -g 497 -s /bin/false -d /var/lib/jenkins -c ''Jenkins Continuous Integration Server'' jenkins'
-              test: 'if grep -q jenkins: /etc/passwd; then exit 1; else exit 0; fi'
-            'c_mountpoint_mkdir':
-              command: 'mkdir /var/lib/jenkins && chown -R jenkins:jenkins /var/lib/jenkins'
-              test: '[ ! -d /var/lib/jenkins ]'
-            'd_mountpoint_mount':
-              command: !Sub 'while ! (echo > /dev/tcp/${MasterStorage}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 10; done && sleep 10 && mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 "${MasterStorage}.efs.${AWS::Region}.amazonaws.com:/" /var/lib/jenkins'
-              test: 'if mount | grep -q /var/lib/jenkins; then exit 1; else exit 0; fi'
-        install:
-          packages:
-            rpm:
-              jenkins: 'https://pkg.jenkins.io/redhat-stable/jenkins-2.164.1-1.1.noarch.rpm'
-            yum:
-              'java-1.8.0-amazon-corretto': []
           files:
             '/etc/cfn/cfn-hup.conf':
               content: !Sub |
@@ -915,7 +1000,7 @@ Resources:
                 $log.info 'poller started'
                 def takeAgentTemporarilyOffline(agent)
                   # sterr is forwarded to sdout to get the information in ruby
-                  out=`java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 -auth 'admin:#{$conf['masterAdminPassword']}' offline-node #{agent} -m 'scale down' 2>&1`
+                  out=`java -jar /opt/jenkins-cli.jar -s http://localhost:8080 -auth 'admin:#{$conf['masterAdminPassword']}' offline-node #{agent} -m 'scale down' 2>&1`
                   if $?.exitstatus == 0
                     $log.info "agent #{agent} is marked as offline"
                     return true
@@ -931,7 +1016,7 @@ Resources:
                 end
                 def deleteAgent(agent)
                   # sterr is forwarded to sdout to get the information in ruby
-                  out=`java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080 -auth 'admin:#{$conf['masterAdminPassword']}' delete-node #{agent} 2>&1`
+                  out=`java -jar /opt/jenkins-cli.jar -s http://localhost:8080 -auth 'admin:#{$conf['masterAdminPassword']}' delete-node #{agent} 2>&1`
                   if $?.exitstatus == 0
                     $log.info "agent #{agent} is deleted"
                     return true
@@ -1038,7 +1123,7 @@ Resources:
                   $log.error "file #{file} is not available, but wait time elapsed"
                   return false
                 end
-                awaitFile('/var/cache/jenkins/war/WEB-INF/jenkins-cli.jar')
+                awaitFile('/opt/jenkins-cli.jar')
                 pollSQS
               mode: '000500'
               owner: root
@@ -1149,40 +1234,43 @@ Resources:
             'b_await_jenkins':
               command: 'until $(curl -s -m 60 -o /dev/null -I -f -u "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" http://localhost:8080/cli/); do printf "."; sleep 1; done'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'c_activate_slave_agent_port':
+            'c_download_cli':
+              command: 'curl -s -m 60 -o /opt/jenkins-cli.jar -u "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" http://localhost:8080/jnlpJars/jenkins-cli.jar'
+              test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
+            'd_activate_slave_agent_port':
               command: 'sed -i -e "s@<slaveAgentPort>.*</slaveAgentPort>@<slaveAgentPort>49817</slaveAgentPort>@" /var/lib/jenkins/config.xml'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'd_disable_master_executors':
+            'e_disable_master_executors':
               command: 'sed -i -e "s@<numExecutors>.*</numExecutors>@<numExecutors>0</numExecutors>@" /var/lib/jenkins/config.xml'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'e_set_label':
+            'f_set_label':
               command: 'sed -i -e "s@<label>.*</label>@<label>master</label>@" /var/lib/jenkins/config.xml'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'f_restart_jenkins':
+            'g_restart_jenkins':
               command: 'service jenkins restart'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'g_await_jenkins':
+            'h_await_jenkins':
               command: 'until $(curl -s -m 60 -o /dev/null -I -f -u "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" http://localhost:8080/cli/); do printf "."; sleep 1; done'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'h_install_plugins':
-              command: 'java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s "http://localhost:8080/" -auth "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" install-plugin $(cat /root/plugins.txt | tr "\n" " ")'
+            'i_install_plugins':
+              command: 'java -jar /opt/jenkins-cli.jar -s "http://localhost:8080/" -auth "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" install-plugin $(cat /root/plugins.txt | tr "\n" " ")'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'i_restart_jenkins':
+            'j_restart_jenkins':
               command: 'service jenkins restart'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'j_await_jenkins':
+            'k_await_jenkins':
               command: 'until $(curl -s -m 60 -o /dev/null -I -f -u "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" http://localhost:8080/cli/); do printf "."; sleep 1; done'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'k_set_admin_password':
-              command: !Sub 'echo $''jenkins.model.Jenkins.instance.securityRealm.createAccount("admin", \''${MasterAdminPassword}\'')'' | java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s "http://localhost:8080/" -auth "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" groovy ='
+            'l_set_admin_password':
+              command: !Sub 'echo $''jenkins.model.Jenkins.instance.securityRealm.createAccount("admin", \''${MasterAdminPassword}\'')'' | java -jar /opt/jenkins-cli.jar -s "http://localhost:8080/" -auth "admin:$(cat /var/lib/jenkins/secrets/initialAdminPassword)" groovy ='
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'l_stop_jenkins':
+            'm_stop_jenkins':
               command: 'service jenkins stop'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-            'z_create_setup_done_file':
+            'x_create_setup_done_file':
               command: 'echo "Setup done. Don not delete this file." > /var/lib/jenkins/setup_done.txt'
               test: '[ ! -f /var/lib/jenkins/setup_done.txt ]'
-        custom:
+        custom_before:
           packages:
             yum:
               git: []
@@ -1207,6 +1295,14 @@ Resources:
                 packages:
                   rpm:
                   - jenkins
+        custom_after:
+          commands:
+            'a_await_jenkins':
+              command: !Sub 'until $(curl -s -m 60 -o /dev/null -I -f -u "admin:${MasterAdminPassword}" http://localhost:8080/cli/); do printf "."; sleep 1; done'
+              test: '[ ! -f /opt/jenkins-cli.jar ]'
+            'b_download_cli':
+              command: !Sub 'curl -s -m 60 -o /opt/jenkins-cli.jar -u "admin:${MasterAdminPassword}" http://localhost:8080/jnlpJars/jenkins-cli.jar'
+              test: '[ ! -f /opt/jenkins-cli.jar ]'
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       IamInstanceProfile: !Ref MasterIP
@@ -1253,10 +1349,10 @@ Resources:
         PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT15M
+        Timeout: PT30M
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        PauseTime: PT15M
+        PauseTime: PT30M
         SuspendProcesses:
         - HealthCheck
         - ReplaceUnhealthy
@@ -1321,6 +1417,7 @@ Resources:
         Value: !GetAtt 'MasterELB.LoadBalancerFullName'
       - Name: TargetGroup
         Value: !GetAtt AgentELBTargetGroup.TargetGroupFullName
+      TreatMissingData: notBreaching
   AgentTargetConnectionErrorCountTooHighAlarm:
     Condition: HasAlertTopic
     Type: 'AWS::CloudWatch::Alarm'
@@ -1340,6 +1437,7 @@ Resources:
         Value: !GetAtt 'MasterELB.LoadBalancerFullName'
       - Name: TargetGroup
         Value: !GetAtt AgentELBTargetGroup.TargetGroupFullName
+      TreatMissingData: notBreaching
   AgentELBListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
@@ -1352,7 +1450,6 @@ Resources:
   AgentIP:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      Path: '/'
       Roles:
       - !Ref AgentIAMRole
   AgentIAMRole:
@@ -1363,13 +1460,22 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - 'ec2.amazonaws.com'
-          Action:
-          - 'sts:AssumeRole'
-      Path: /
-      ManagedPolicyArns: !If [HasSystemsManagerAccess, ['arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'], []] # TODO get rid of managed policy
+            Service: 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
       Policies:
+      - !If
+        - HasSystemsManagerAccess
+        - PolicyName: ssm
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'ssmmessages:*' # SSM Agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ssm:UpdateInstanceInformation' # SSM agent by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              - 'ec2messages:*' # SSM Session Manager by https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-setting-up-messageAPIs.html
+              Resource: '*'
+        - !Ref 'AWS::NoValue'
       - PolicyName: ec2
         PolicyDocument:
           Version: '2012-10-17'
@@ -1386,6 +1492,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
+            - 'logs:CreateLogGroup'
             - 'logs:CreateLogStream'
             - 'logs:PutLogEvents'
             - 'logs:DescribeLogStreams'
@@ -1395,10 +1502,8 @@ Resources:
           Version: '2012-10-17'
           Statement:
           - Effect: Allow
-            Action:
-            - 'sts:AssumeRole'
-            Resource:
-            - '*'
+            Action: 'sts:AssumeRole'
+            Resource: '*'
   AgentIAMPolicySSHAccess:
     Type: 'AWS::IAM::Policy'
     Condition: HasIAMUserSSHAccess
@@ -1704,7 +1809,6 @@ Resources:
         setup:
           packages:
             yum:
-              'nfs-utils': []
               'ruby': []
             rubygems:
               'aws-sdk-autoscaling': ['1.13.0']
@@ -1954,11 +2058,11 @@ Resources:
         PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT10M
+        Timeout: PT15M
         Count: !If [HasZeroAgents, 0, 1]
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        PauseTime: PT10M
+        PauseTime: PT15M
         SuspendProcesses:
         - HealthCheck
         - ReplaceUnhealthy
@@ -1983,6 +2087,7 @@ Resources:
       Dimensions:
       - Name: AutoScalingGroupName
         Value: !Ref AgentASG
+      TreatMissingData: notBreaching
   AgentTerminatingLifecycleHookQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
@@ -2008,6 +2113,7 @@ Resources:
       Dimensions:
       - Name: QueueName
         Value: !GetAtt 'AgentTerminatingLifecycleHookQueue.QueueName'
+      TreatMissingData: notBreaching
   AgentTerminatingLifecycleHookDeadLetterQueue:
     Type: 'AWS::SQS::Queue'
     Properties:
@@ -2029,6 +2135,7 @@ Resources:
       Dimensions:
       - Name: QueueName
         Value: !GetAtt 'AgentTerminatingLifecycleHookDeadLetterQueue.QueueName'
+      TreatMissingData: notBreaching
   AgentTerminatingLifecycleHookIAMRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -2037,11 +2144,8 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - 'autoscaling.amazonaws.com'
-          Action:
-          - 'sts:AssumeRole'
-      Path: '/'
+            Service: 'autoscaling.amazonaws.com'
+          Action: 'sts:AssumeRole'
       Policies:
       - PolicyName: sqs
         PolicyDocument:
@@ -2102,6 +2206,116 @@ Resources:
       Namespace: !Ref 'AWS::StackName'
       ComparisonOperator: LessThanOrEqualToThreshold
       MetricName: BuildActiveQueue
+  LambdaRole:
+    Condition: HasEFSProvisionedThroughput
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+  LambdaPolicy:
+    Condition: HasEFSProvisionedThroughput
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      Roles:
+      - !Ref LambdaRole
+      PolicyName: lambda
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+          - 'logs:CreateLogStream'
+          - 'logs:PutLogEvents'
+          Resource: !GetAtt 'LambdaLogGroup.Arn'
+  LambdaFunction: # needs no monitoring because it is used as a custom resource
+    Condition: HasEFSProvisionedThroughput
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          'use strict';
+          const response = require('cfn-response');
+          exports.handler = (event, context, cb) => {
+            const throughput = parseInt(event.ResourceProperties.ThroughputInMibps, 10);
+            const threshold = Math.round(throughput * 1048576 * 600 * 0.9);
+            response.send(event, context, response.SUCCESS, {Threshold: threshold});
+          };
+      Handler: 'index.handler'
+      MemorySize: 128
+      Role: !GetAtt 'LambdaRole.Arn'
+      Runtime: 'nodejs12.x'
+      Timeout: 60
+  LambdaLogGroup:
+    Condition: HasEFSProvisionedThroughput
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${LambdaFunction}'
+      RetentionInDays: !Ref MasterLogsRetentionInDays
+  MaxThroughputCalculator:
+    Condition: HasEFSProvisionedThroughput
+    Type: 'Custom::MaxThroughputCalculator'
+    DependsOn:
+    - LambdaLogGroup
+    - LambdaPolicy
+    Version: '1.0'
+    Properties:
+      ThroughputInMibps: !Ref EFSProvisionedThroughputInMibps
+      ServiceToken: !GetAtt 'LambdaFunction.Arn'
+  BackupVault: # cannot be deleted with data
+    Condition: HasEFSBackupRetentionPeriod
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Ref 'AWS::StackName'
+      Notifications: !If [HasAlertTopic, {BackupVaultEvents: [BACKUP_JOB_STARTED, BACKUP_JOB_COMPLETED, RESTORE_JOB_STARTED, RESTORE_JOB_COMPLETED, RECOVERY_POINT_MODIFIED], SNSTopicArn: {'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'}}, !Ref 'AWS::NoValue']
+  BackupPlan:
+    Condition: HasEFSBackupRetentionPeriod
+    Type: 'AWS::Backup::BackupPlan'
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Ref 'AWS::StackName'
+        BackupPlanRule:
+        - CompletionWindowMinutes: 1440
+          Lifecycle:
+            DeleteAfterDays: !Ref EFSBackupRetentionPeriod
+          RuleName: !Ref 'AWS::StackName'
+          ScheduleExpression: !Ref EFSBackupScheduleExpression
+          StartWindowMinutes: 60
+          TargetBackupVault: !Ref BackupVault
+  BackupRole:
+    Condition: HasEFSBackupRetentionPeriod
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'backup.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: backup
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'elasticfilesystem:Backup'
+            - 'elasticfilesystem:DescribeTags'
+            Resource: !Sub 'arn:${AWS::Partition}:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${MasterStorage}'
+  BackupSelection:
+    Condition: HasEFSBackupRetentionPeriod
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref BackupPlan
+      BackupSelection:
+        IamRoleArn: !GetAtt 'BackupRole.Arn'
+        Resources:
+        - !Sub 'arn:${AWS::Partition}:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${MasterStorage}'
+        SelectionName: !Ref 'AWS::StackName'
 Outputs:
   TemplateID:
     Description: 'cloudonaut.io template id.'

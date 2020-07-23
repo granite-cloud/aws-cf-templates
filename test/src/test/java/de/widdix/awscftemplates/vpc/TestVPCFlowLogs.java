@@ -11,28 +11,22 @@ public class TestVPCFlowLogs extends ACloudFormationTest {
         final String vpcStackName = "vpc-2azs-" + this.random8String();
         final String flowLogsStackName = "vpc-flow-logs-" + this.random8String();
         final String classB = "10";
-        final String keyName = "key-" + this.random8String();
         try {
-            this.createKey(keyName);
+            this.createStack(vpcStackName,
+                    "vpc/vpc-2azs.yaml",
+                    new Parameter().withParameterKey("ClassB").withParameterValue(classB)
+            );
             try {
-                this.createStack(vpcStackName,
-                        "vpc/vpc-2azs.yaml",
-                        new Parameter().withParameterKey("ClassB").withParameterValue(classB)
+                this.createStack(flowLogsStackName,
+                        "vpc/vpc-flow-logs.yaml",
+                        new Parameter().withParameterKey("ParentVPCStack").withParameterValue(vpcStackName)
                 );
-                try {
-                    this.createStack(flowLogsStackName,
-                            "vpc/vpc-flow-logs.yaml",
-                            new Parameter().withParameterKey("ParentVPCStack").withParameterValue(vpcStackName)
-                    );
-                    // TODO how can we check if this stack works?
-                } finally {
-                    this.deleteStack(flowLogsStackName);
-                }
+                // TODO how can we check if this stack works?
             } finally {
-                this.deleteStack(vpcStackName);
+                this.deleteStack(flowLogsStackName);
             }
         } finally {
-            this.deleteKey(keyName);
+            this.deleteStack(vpcStackName);
         }
     }
 
