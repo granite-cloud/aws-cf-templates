@@ -45,6 +45,7 @@ Metadata:
       - KeyName
       - IAMUserSSHAccess
       - ManagedPolicyArns
+      - PermissionsBoundary
     - Label:
         default: 'EC2 Parameters'
       Parameters:
@@ -163,6 +164,10 @@ Parameters:
     Description: 'Optional comma-delimited list of IAM managed policy ARNs to attach to the instance''s IAM role.'
     Type: String
     Default: ''
+  PermissionsBoundary:
+    Description: 'Optional ARN for a policy that will be used as the permission boundary for all roles created by this template.'
+    Type: String
+    Default: ''
   RootVolumeSize:
     Description: 'The root volume size, in Gibibytes (GiB) (if RestoreImageId is set, value must be >= snapshot of AMI).'
     Type: Number
@@ -196,9 +201,15 @@ Parameters:
     Description: 'Version of Amazon Linux 2 to boot from the first time (ignored if RestoreImageId is set; select the latest version for new stacks; OS updates are enabled to patch the system).'
     Type: String
     Default: '20191217.0'
-    AllowedValues: ['20200520.1', '20200406.0', '20200304.0', '20200207.1', '20191217.0']
+    AllowedValues: ['20210126.0', '20200917.0', '20200722.0', '20200520.1', '20200406.0', '20200304.0', '20200207.1', '20191217.0']
 Mappings:
   VersionMap:
+    '20210126.0':
+      Map: RegionMap202101260
+    '20200917.0':
+      Map: RegionMap20200917
+    '20200722.0':
+      Map: RegionMap202007220
     '20200520.1':
       Map: RegionMap202005201
     '20200406.0':
@@ -209,6 +220,129 @@ Mappings:
       Map: RegionMap202002071
     '20191217.0':
       Map: RegionMap201912170
+  RegionMap202101260:
+    'af-south-1':
+      AMI: 'ami-0438616cef15ba2ca'
+    'eu-north-1':
+      AMI: 'ami-0eb6f319b31f7092d'
+    'ap-south-1':
+      AMI: 'ami-08e0ca9924195beba'
+    'eu-west-3':
+      AMI: 'ami-0ea4a063871686f37'
+    'eu-west-2':
+      AMI: 'ami-098828924dc89ea4a'
+    'eu-south-1':
+      AMI: 'ami-0ea288dd7bb5b0251'
+    'eu-west-1':
+      AMI: 'ami-0fc970315c2d38f01'
+    'ap-northeast-2':
+      AMI: 'ami-09282971cf2faa4c9'
+    'me-south-1':
+      AMI: 'ami-0cc4f2b06b56d27e9'
+    'ap-northeast-1':
+      AMI: 'ami-0992fc94ca0f1415a'
+    'sa-east-1':
+      AMI: 'ami-089aac6323aa08aee'
+    'ca-central-1':
+      AMI: 'ami-075cfad2d9805c5f2'
+    'ap-east-1':
+      AMI: 'ami-040f64b9a031d8eb0'
+    'ap-southeast-1':
+      AMI: 'ami-0e2e44c03b85f58b3'
+    'ap-southeast-2':
+      AMI: 'ami-04f77aa5970939148'
+    'eu-central-1':
+      AMI: 'ami-0a6dc7529cd559185'
+    'us-east-1':
+      AMI: 'ami-047a51fa27710816e'
+    'us-east-2':
+      AMI: 'ami-01aab85a5e4a5a0fe'
+    'us-west-1':
+      AMI: 'ami-005c06c6de69aee84'
+    'us-west-2':
+      AMI: 'ami-0e999cbd62129e3b1'
+  RegionMap20200917:
+    'af-south-1':
+      AMI: 'ami-0cec12e29ebe3f0d5'
+    'eu-north-1':
+      AMI: 'ami-0653812935d0743fe'
+    'ap-south-1':
+      AMI: 'ami-0e306788ff2473ccb'
+    'eu-west-3':
+      AMI: 'ami-0de12f76efe134f2f'
+    'eu-west-2':
+      AMI: 'ami-0a669382ea0feb73a'
+    'eu-south-1':
+      AMI: 'ami-0759301b88845d121'
+    'eu-west-1':
+      AMI: 'ami-0bb3fad3c0286ebd5'
+    'ap-northeast-2':
+      AMI: 'ami-03b42693dc6a7dc35'
+    'me-south-1':
+      AMI: 'ami-08155c9ee8b845e35'
+    'ap-northeast-1':
+      AMI: 'ami-0ce107ae7af2e92b5'
+    'sa-east-1':
+      AMI: 'ami-02898a1921d38a50b'
+    'ca-central-1':
+      AMI: 'ami-0c2f25c1f66a1ff4d'
+    'ap-east-1':
+      AMI: 'ami-814d0ff0'
+    'ap-southeast-1':
+      AMI: 'ami-015a6758451df3cb9'
+    'ap-southeast-2':
+      AMI: 'ami-0f96495a064477ffb'
+    'eu-central-1':
+      AMI: 'ami-00a205cb8e06c3c4e'
+    'us-east-1':
+      AMI: 'ami-0947d2ba12ee1ff75'
+    'us-east-2':
+      AMI: 'ami-03657b56516ab7912'
+    'us-west-1':
+      AMI: 'ami-0e4035ae3f70c400f'
+    'us-west-2':
+      AMI: 'ami-0528a5175983e7f28'
+  RegionMap202007220:
+    'af-south-1':
+      AMI: 'ami-08c9d9528020000ac'
+    'eu-north-1':
+      AMI: 'ami-039609244d2810a6b'
+    'ap-south-1':
+      AMI: 'ami-0ebc1ac48dfd14136'
+    'eu-west-3':
+      AMI: 'ami-093fa4c538885becf'
+    'eu-west-2':
+      AMI: 'ami-0a13d44dccf1f5cf6'
+    'eu-south-1':
+      AMI: 'ami-0533a9871112d2d51'
+    'eu-west-1':
+      AMI: 'ami-07d9160fa81ccffb5'
+    'ap-northeast-2':
+      AMI: 'ami-0bd7691bf6470fe9c'
+    'me-south-1':
+      AMI: 'ami-01f41d49c363da2ad'
+    'ap-northeast-1':
+      AMI: 'ami-0cc75a8978fbbc969'
+    'sa-east-1':
+      AMI: 'ami-018ccfb6b4745882a'
+    'ca-central-1':
+      AMI: 'ami-013d1df4bcea6ba95'
+    'ap-east-1':
+      AMI: 'ami-47317236'
+    'ap-southeast-1':
+      AMI: 'ami-0cd31be676780afa7'
+    'ap-southeast-2':
+      AMI: 'ami-0ded330691a314693'
+    'eu-central-1':
+      AMI: 'ami-0c115dbd34c69a004'
+    'us-east-1':
+      AMI: 'ami-02354e95b39ca8dec'
+    'us-east-2':
+      AMI: 'ami-07c8bc5c1ce9598c3'
+    'us-west-1':
+      AMI: 'ami-05655c267c89566dd'
+    'us-west-2':
+      AMI: 'ami-0873b46c45c11058d'
   RegionMap202005201:
     'af-south-1':
       AMI: 'ami-0ec47ddb564d75b64'
@@ -403,6 +537,7 @@ Mappings:
     'us-west-2':
       AMI: 'ami-04590e7389a6e577c'
 Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundary, '']]
   HasKmsKey: !Not [!Equals [!Ref ParentKmsKeyStack, '']]
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasIAMUserSSHAccess: !Equals [!Ref IAMUserSSHAccess, 'true']
@@ -518,6 +653,7 @@ Resources:
             Service: 'ec2.amazonaws.com'
           Action: 'sts:AssumeRole'
       ManagedPolicyArns: !If [HasManagedPolicyArns, !Split [',', !Ref ManagedPolicyArns], !Ref 'AWS::NoValue']
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: ssm
         PolicyDocument:
@@ -597,7 +733,7 @@ Resources:
           - 'iam:GetSSHPublicKey'
           Resource:
           - !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
-  VirtualMachine:
+  VirtualMachine: # TODO make IMDSv2 required (waits for https://github.com/aws-cloudformation/aws-cloudformation-coverage-roadmap/issues/655)
     Type: 'AWS::EC2::Instance'
     Metadata:
       'AWS::CloudFormation::Init':
@@ -1017,6 +1153,7 @@ Resources:
           Principal:
             Service: 'backup.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: backup
         PolicyDocument:

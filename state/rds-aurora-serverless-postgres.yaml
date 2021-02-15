@@ -117,12 +117,12 @@ Parameters:
   MaxCapacity:
     Description: 'The maximum capacity units for a Serverless Aurora cluster.'
     Type: String
-    AllowedValues: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    AllowedValues: [2, 4, 8, 16, 32, 64, 192, 384]
     Default: 2
   MinCapacity:
     Description: 'The minimum capacity units for a Serverless Aurora cluster.'
     Type: String
-    AllowedValues: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    AllowedValues: [2, 4, 8, 16, 32, 64, 192, 384]
     Default: 2
   SecondsUntilAutoPause:
     Description: 'The time, in seconds, before a Serverless Aurora cluster is paused.'
@@ -248,3 +248,8 @@ Outputs:
     Value: !GetAtt 'DBCluster.Endpoint.Address'
     Export:
       Name: !Sub '${AWS::StackName}-DNSName'
+  SecurityGroupId:
+    Description: 'The security group used to manage access to RDS Aurora Serverless Postgres.'
+    Value: !Ref ClusterSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'

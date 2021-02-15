@@ -26,6 +26,7 @@ Metadata:
       - ParentAlertStack
       - ParentZoneStack
       - ParentS3StackAccessLog
+      - ParentWAFStack
     - Label:
         default: 'Load Balancer Parameters'
       Parameters:
@@ -46,6 +47,10 @@ Metadata:
       - MaxCapacity
       - MinCapacity
       - HealthCheckGracePeriod
+    - Label:
+        default: 'Permission Parameters'
+      Parameters:
+      - PermissionsBoundary
 Parameters:
   ParentVPCStack:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
@@ -67,6 +72,14 @@ Parameters:
     Default: ''
   ParentS3StackAccessLog:
     Description: 'Optional stack name of parent s3 stack based on state/s3.yaml template (with Access set to ElbAccessLogWrite) to store access logs.'
+    Type: String
+    Default: ''
+  ParentWAFStack:
+    Description: 'Optional stack name of parent WAF stack based on the security/waf.yaml template.'
+    Type: String
+    Default: ''
+  PermissionsBoundary:
+    Description: 'Optional ARN for a policy that will be used as the permission boundary for all roles created by this template.'
     Type: String
     Default: ''
   LoadBalancerScheme:
@@ -130,6 +143,7 @@ Parameters:
     MinValue: 0
     MaxValue: 1800
 Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundary, '']]
   HasAuthProxySecurityGroup: !Not [!Equals [!Ref ParentAuthProxyStack, '']]
   HasNotAuthProxySecurityGroup: !Equals [!Ref ParentAuthProxyStack, '']
   HasLoadBalancerSchemeInternetFacing: !Equals [!Ref LoadBalancerScheme, 'internet-facing']
@@ -142,6 +156,7 @@ Conditions:
   HasZoneAndLoadBalancerSchemeInternetFacing: !And [!Condition HasZone, !Condition HasLoadBalancerSchemeInternetFacing]
   HasS3Bucket: !Not [!Equals [!Ref ParentS3StackAccessLog, '']]
   HasAutoScaling: !Equals [!Ref AutoScaling, 'true']
+  HasWAF: !Not [!Equals [!Ref ParentWAFStack, '']]
 Resources:
   TaskDefinition:
     Type: 'AWS::ECS::TaskDefinition'
@@ -364,6 +379,12 @@ Resources:
       - HasLoadBalancerSchemeInternal
       - !Split [',', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetsPrivate'}]
       - !Split [',', {'Fn::ImportValue': !Sub '${ParentVPCStack}-SubnetsPublic'}]
+  WebACLAssociation:
+    Condition: HasWAF
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLArn: {'Fn::ImportValue': !Sub '${ParentWAFStack}-WebACL'}
   HttpListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
@@ -385,6 +406,7 @@ Resources:
       LoadBalancerArn: !Ref LoadBalancer
       Port: 443
       Protocol: HTTPS
+      SslPolicy: 'ELBSecurityPolicy-FS-1-2-Res-2019-08'
   ServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -397,6 +419,7 @@ Resources:
           Principal:
             Service: 'ecs.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
   Service:
     Type: 'AWS::ECS::Service'
     DependsOn: HttpListener
@@ -467,6 +490,7 @@ Resources:
           Principal:
             Service: 'application-autoscaling.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: ecs
         PolicyDocument:

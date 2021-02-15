@@ -134,11 +134,17 @@ Parameters:
     Description: 'Aurora Serverless MySQL version.'
     Type: String
     Default: '5.6.10a'
-    AllowedValues: ['5.6.10a'] # aws rds describe-db-engine-versions --engine aurora --query 'DBEngineVersions[?contains(SupportedEngineModes,`serverless`)]'
+    AllowedValues: ['5.6.10a', '5.7.mysql-aurora.2.07.1'] # aws rds describe-db-engine-versions --engine aurora --query 'DBEngineVersions[?contains(SupportedEngineModes,`serverless`)]'; aws rds describe-db-engine-versions --engine aurora-mysql --query 'DBEngineVersions[?contains(SupportedEngineModes,`serverless`)]'
 Mappings:
   EngineVersionMap:
     '5.6.10a':
       ClusterParameterGroupFamily: 'aurora5.6'
+      EngineVersion: '5.6.10a'
+      Engine: aurora
+    '5.7.mysql-aurora.2.07.1':
+      ClusterParameterGroupFamily: 'aurora-mysql5.7'
+      EngineVersion: '5.7.mysql_aurora.2.07.1'
+      Engine: 'aurora-mysql'
 Conditions:
   HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
   HasSSHBastionSecurityGroup: !Not [!Equals [!Ref ParentSSHBastionStack, '']]
@@ -207,9 +213,9 @@ Resources:
       DBClusterParameterGroupName: !Ref DBClusterParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       EnableHttpEndpoint: !Ref EnableDataApi
-      Engine: aurora
+      Engine: !FindInMap [EngineVersionMap, !Ref EngineVersion, Engine]
       EngineMode: serverless
-      EngineVersion: !Ref EngineVersion
+      EngineVersion: !FindInMap [EngineVersionMap, !Ref EngineVersion, EngineVersion]
       KmsKeyId: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', {'Fn::ImportValue': !Sub '${ParentKmsKeyStack}-KeyArn'}]
       MasterUsername: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !Ref DBMasterUsername]
       MasterUserPassword: !If [HasDBSnapshotIdentifier, !Ref 'AWS::NoValue', !Ref DBMasterUserPassword]
@@ -255,3 +261,8 @@ Outputs:
     Value: !GetAtt 'DBCluster.Endpoint.Address'
     Export:
       Name: !Sub '${AWS::StackName}-DNSName'
+  SecurityGroupId:
+    Description: 'The security group used to manage access to RDS Aurora Serverless.'
+    Value: !Ref ClusterSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'

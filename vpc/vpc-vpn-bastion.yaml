@@ -46,6 +46,10 @@ Metadata:
       - VPNUserName
       - VPNUserPassword
       - VPNAdminPassword
+    - Label:
+        default: 'Permission Parameters'
+      Parameters:
+      - PermissionsBoundary
 Parameters:
   ParentVPCStack:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
@@ -56,6 +60,10 @@ Parameters:
     Default: ''
   ParentZoneStack:
     Description: 'Optional stack name of parent zone stack based on vpc/zone-*.yaml template.'
+    Type: String
+    Default: ''
+  PermissionsBoundary:
+    Description: 'Optional ARN for a policy that will be used as the permission boundary for all roles created by this template.'
     Type: String
     Default: ''
   KeyName:
@@ -125,46 +133,47 @@ Parameters:
 Mappings:
   RegionMap:
     'af-south-1':
-      AMI: 'ami-0ec47ddb564d75b64'
+      AMI: 'ami-0438616cef15ba2ca'
     'eu-north-1':
-      AMI: 'ami-04697c9bb5d6135a2'
+      AMI: 'ami-0eb6f319b31f7092d'
     'ap-south-1':
-      AMI: 'ami-0447a12f28fddb066'
+      AMI: 'ami-08e0ca9924195beba'
     'eu-west-3':
-      AMI: 'ami-01c72e187b357583b'
+      AMI: 'ami-0ea4a063871686f37'
     'eu-west-2':
-      AMI: 'ami-032598fcc7e9d1c7a'
+      AMI: 'ami-098828924dc89ea4a'
     'eu-south-1':
-      AMI: 'ami-0f9b9a8cf93d838d0'
+      AMI: 'ami-0ea288dd7bb5b0251'
     'eu-west-1':
-      AMI: 'ami-0ea3405d2d2522162'
+      AMI: 'ami-0fc970315c2d38f01'
     'ap-northeast-2':
-      AMI: 'ami-01af223aa7f274198'
+      AMI: 'ami-09282971cf2faa4c9'
     'me-south-1':
-      AMI: 'ami-01b31491b74045c0c'
+      AMI: 'ami-0cc4f2b06b56d27e9'
     'ap-northeast-1':
-      AMI: 'ami-0a1c2ec61571737db'
+      AMI: 'ami-0992fc94ca0f1415a'
     'sa-east-1':
-      AMI: 'ami-0477a95397a9154b3'
+      AMI: 'ami-089aac6323aa08aee'
     'ca-central-1':
-      AMI: 'ami-0f75c2980c6a5851d'
+      AMI: 'ami-075cfad2d9805c5f2'
     'ap-east-1':
-      AMI: 'ami-49bbfa38'
+      AMI: 'ami-040f64b9a031d8eb0'
     'ap-southeast-1':
-      AMI: 'ami-0615132a0f36d24f4'
+      AMI: 'ami-0e2e44c03b85f58b3'
     'ap-southeast-2':
-      AMI: 'ami-088ff0e3bde7b3fdf'
+      AMI: 'ami-04f77aa5970939148'
     'eu-central-1':
-      AMI: 'ami-0a02ee601d742e89f'
+      AMI: 'ami-0a6dc7529cd559185'
     'us-east-1':
-      AMI: 'ami-09d95fab7fff3776c'
+      AMI: 'ami-047a51fa27710816e'
     'us-east-2':
-      AMI: 'ami-026dea5602e368e96'
+      AMI: 'ami-01aab85a5e4a5a0fe'
     'us-west-1':
-      AMI: 'ami-04e59c05167ea7bd5'
+      AMI: 'ami-005c06c6de69aee84'
     'us-west-2':
-      AMI: 'ami-0e34e7b9ca0ace12d'
+      AMI: 'ami-0e999cbd62129e3b1'
 Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundary, '']]
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasIAMUserSSHAccess: !Equals [!Ref IAMUserSSHAccess, 'true']
   HasSystemsManagerAccess: !Equals [!Ref SystemsManagerAccess, 'true']
@@ -340,6 +349,7 @@ Resources:
             Service: 'ec2.amazonaws.com'
           Action: 'sts:AssumeRole'
       ManagedPolicyArns: !If [HasManagedPolicyArns, !Split [',', !Ref ManagedPolicyArns], !Ref 'AWS::NoValue']
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - !If
         - HasSystemsManagerAccess
@@ -392,8 +402,8 @@ Resources:
           - 'iam:ListSSHPublicKeys'
           - 'iam:GetSSHPublicKey'
           Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
@@ -619,7 +629,7 @@ Resources:
               'amazon-efs-utils': []
           commands:
             'a_mount':
-              command: !Sub 'mkdir /mnt/storage && echo "${Storage}:/ /mnt/storage efs tls,_netdev 0 0" >> /etc/fstab && mount -a -t efs'
+              command: !Sub 'mkdir /mnt/storage && echo "${Storage}:/ /mnt/storage efs tls,_netdev 0 0" >> /etc/fstab && while ! (echo > /dev/tcp/${Storage}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 5; done && mount -a -t efs'
               test: '[ ! -d /mnt/storage ]'
             'b_mkdir_backup':
               command: 'mkdir backup.vpn_server.config && chmod 700 backup.vpn_server.config'
@@ -700,8 +710,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.LaunchConfiguration.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=LaunchConfiguration
+                path=Resources.LaunchTemplate.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=LaunchTemplate
                 runas=root
           commands:
             'a_await_vpnserver':
@@ -753,30 +763,43 @@ Resources:
                 enabled: !If [HasSystemsManagerAccess, true, false]
                 ensureRunning: !If [HasSystemsManagerAccess, true, false]
     Properties:
-      AssociatePublicIpAddress: true
-      EbsOptimized: false
-      IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: !Ref InstanceType
-      SecurityGroups:
-      - !Ref SecurityGroup
-      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -ex
-          trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup' ERR
-          INSTANCEID=$(curl -s -m 60 http://169.254.169.254/latest/meta-data/instance-id)
-          aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCEID --allocation-id ${EIP.AllocationId}
-          aws --region ${AWS::Region} ec2 modify-instance-attribute --instance-id $INSTANCEID --source-dest-check "{\"Value\": false}"
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref InstanceType
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+        MetadataOptions:
+          HttpTokens: required
+        NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          Groups:
+          - !Ref SecurityGroup
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup' ERR
+            TOKEN=$(curl --silent --max-time 60 -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 30")
+            INSTANCEID=$(curl --silent --max-time 60 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+            aws --region ${AWS::Region} ec2 associate-address --instance-id $INSTANCEID --allocation-id ${EIP.AllocationId}
+            aws --region ${AWS::Region} ec2 modify-instance-attribute --instance-id $INSTANCEID --source-dest-check "{\"Value\": false}"
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e 0 --region ${AWS::Region} --stack ${AWS::StackName} --resource AutoScalingGroup
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     DependsOn:
     - StorageMountTargetA
     - StorageMountTargetB
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MaxSize: '1'
       MinSize: '1'
       Tags:
@@ -835,6 +858,7 @@ Resources:
           Principal:
             Service: 'lambda.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
   LambdaPolicy:
     Condition: HasEFSProvisionedThroughput
     Type: 'AWS::IAM::Policy'
@@ -914,6 +938,7 @@ Resources:
           Principal:
             Service: 'backup.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: backup
         PolicyDocument:

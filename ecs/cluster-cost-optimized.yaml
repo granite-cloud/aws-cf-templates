@@ -51,6 +51,10 @@ Metadata:
       - MinSize
       - DrainingTimeoutInSeconds
       - StopContainerTimeoutInSeconds
+    - Label:
+        default: 'Permission Parameters'
+      Parameters:
+      - PermissionsBoundary
 Parameters:
   ParentVPCStack:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
@@ -81,6 +85,10 @@ Parameters:
     Default: ''
   ParentClientStack3:
     Description: 'Optional stack name of parent Client Security Group stack based on state/client-sg.yaml template to allow network access from the cluster to whatever uses the client security group.'
+    Type: String
+    Default: ''
+  PermissionsBoundary:
+    Description: 'Optional ARN for a policy that will be used as the permission boundary for all roles created by this template.'
     Type: String
     Default: ''
   KeyName:
@@ -166,43 +174,48 @@ Parameters:
     MaxValue: 3600
 Mappings:
   RegionMap:
+    'af-south-1':
+      ECSAMI: 'ami-03b4171c2514d23c8'
     'eu-north-1':
-      ECSAMI: 'ami-0639f978e5b88a840'
+      ECSAMI: 'ami-0437d0e29b8dd2629'
     'ap-south-1':
-      ECSAMI: 'ami-0a03968949ee4e012'
+      ECSAMI: 'ami-08fcbb6bcfbc5ced8'
     'eu-west-3':
-      ECSAMI: 'ami-0b700aef0f223def9'
+      ECSAMI: 'ami-0b2b26f34eb9f6482'
     'eu-west-2':
-      ECSAMI: 'ami-03ec263c71e44528d'
+      ECSAMI: 'ami-0f82969826859fb14'
+    'eu-south-1':
+      ECSAMI: 'ami-041a04d3133bd1c82'
     'eu-west-1':
-      ECSAMI: 'ami-09cec0d91e6d220ea'
+      ECSAMI: 'ami-0c15700b4e6bf474e'
     'ap-northeast-2':
-      ECSAMI: 'ami-0750fd52026129ec6'
+      ECSAMI: 'ami-0d9ea717f56829882'
     'me-south-1':
-      ECSAMI: 'ami-0d2020f7eaca12fa0'
+      ECSAMI: 'ami-022179c15f37ed380'
     'ap-northeast-1':
-      ECSAMI: 'ami-00e177b8d879d5d3f'
+      ECSAMI: 'ami-08aba6714243b1bf9'
     'sa-east-1':
-      ECSAMI: 'ami-05b1add1a0c31be07'
+      ECSAMI: 'ami-0e32d15591985c079'
     'ca-central-1':
-      ECSAMI: 'ami-00f6d6e2711b7adbe'
+      ECSAMI: 'ami-0c9bfd3e97bd089e9'
     'ap-east-1':
-      ECSAMI: 'ami-0a75552e697a7b2aa'
+      ECSAMI: 'ami-0300fb071542677b3'
     'ap-southeast-1':
-      ECSAMI: 'ami-0689726e1a700ed66'
+      ECSAMI: 'ami-093df4839e8df694e'
     'ap-southeast-2':
-      ECSAMI: 'ami-0e6b68880cc94cf09'
+      ECSAMI: 'ami-0122a3618e52b6418'
     'eu-central-1':
-      ECSAMI: 'ami-0fe4cfe8d04ec091e'
+      ECSAMI: 'ami-0f8ee411ba3a66276'
     'us-east-1':
-      ECSAMI: 'ami-00f69adbdc780866c'
+      ECSAMI: 'ami-0e5b37ba2c8e7cc82'
     'us-east-2':
-      ECSAMI: 'ami-044bf85e844eddde5'
+      ECSAMI: 'ami-09c93f5e8e4b50e05'
     'us-west-1':
-      ECSAMI: 'ami-014ee82610857fa9a'
+      ECSAMI: 'ami-0306f5737181bb754'
     'us-west-2':
-      ECSAMI: 'ami-088dbc54f17f8a1a2'
+      ECSAMI: 'ami-0927d80c641f8d8bb'
 Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundary, '']]
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasIAMUserSSHAccess: !Equals [!Ref IAMUserSSHAccess, 'true']
   HasSystemsManagerAccess: !Equals [!Ref SystemsManagerAccess, 'true']
@@ -244,6 +257,7 @@ Resources:
             Service: 'ec2.amazonaws.com'
           Action: 'sts:AssumeRole'
       ManagedPolicyArns: !If [HasManagedPolicyArns, !Split [',', !Ref ManagedPolicyArns], !Ref 'AWS::NoValue']
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - !If
         - HasSystemsManagerAccess
@@ -505,7 +519,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 15
       HealthCheckPort: '51678'
-      HealthCheckPath: '/'
+      HealthCheckPath: '/v1/metadata'
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 2
@@ -539,8 +553,9 @@ Resources:
       LoadBalancerArn: !Ref LoadBalancer
       Port: 443
       Protocol: HTTPS
-  LaunchConfiguration:
-    Type: 'AWS::AutoScaling::LaunchConfiguration'
+      SslPolicy: 'ELBSecurityPolicy-FS-1-2-Res-2019-08'
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
     Metadata:
       'AWS::CloudFormation::Init':
         configSets:
@@ -762,8 +777,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.LaunchConfiguration.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=LaunchConfiguration
+                path=Resources.LaunchTemplate.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=LaunchTemplate
                 runas=root
           services:
             sysvinit:
@@ -780,32 +795,45 @@ Resources:
                   yum:
                   - amazon-ssm-agent
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', ECSAMI]
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: !Ref InstanceType
-      SecurityGroups:
-      - !Ref SecurityGroup
-      - !If [HasClientSecurityGroup1, {'Fn::ImportValue': !Sub '${ParentClientStack1}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
-      - !If [HasClientSecurityGroup2, {'Fn::ImportValue': !Sub '${ParentClientStack2}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
-      - !If [HasClientSecurityGroup3, {'Fn::ImportValue': !Sub '${ParentClientStack3}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
-      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -ex
-          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
-          echo "ECS_CLUSTER=${Cluster}" >> /etc/ecs/ecs.config
-           echo "ECS_CONTAINER_STOP_TIMEOUT=${StopContainerTimeoutInSeconds}s" >> /etc/ecs/ecs.config
-          yum install -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+      LaunchTemplateData:
+        BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            Encrypted: true
+            VolumeType: gp3
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', ECSAMI]
+        InstanceType: !Ref InstanceType
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+        MetadataOptions:
+          HttpPutResponseHopLimit: 2 # support Docker containers
+          HttpTokens: required
+        SecurityGroupIds:
+        - !Ref SecurityGroup
+        - !If [HasClientSecurityGroup1, {'Fn::ImportValue': !Sub '${ParentClientStack1}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
+        - !If [HasClientSecurityGroup2, {'Fn::ImportValue': !Sub '${ParentClientStack2}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
+        - !If [HasClientSecurityGroup3, {'Fn::ImportValue': !Sub '${ParentClientStack3}-ClientSecurityGroup'}, !Ref 'AWS::NoValue']
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}' ERR
+            echo "ECS_CLUSTER=${Cluster}" >> /etc/ecs/ecs.config
+            echo "ECS_CONTAINER_STOP_TIMEOUT=${StopContainerTimeoutInSeconds}s" >> /etc/ecs/ecs.config
+            echo "ECS_ALLOW_OFFHOST_INTROSPECTION_ACCESS=true" >> /etc/ecs/ecs.config
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt 'LaunchTemplate.LatestVersionNumber'
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       Cooldown: '600'
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 900 # needs to be in sync with CreationPolicy/UpdatePolicy timeout
       HealthCheckType: ELB
       TargetGroupARNs:
       - !Ref DefaultTargetGroup
@@ -913,6 +941,7 @@ Resources:
           Principal:
             Service: 'autoscaling.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: sqs
         PolicyDocument:
@@ -1103,6 +1132,7 @@ Resources:
           Principal:
             Service: 'lambda.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: autoscaling
         PolicyDocument:
@@ -1203,6 +1233,7 @@ Resources:
           Principal:
             Service: 'lambda.amazonaws.com'
           Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundary, !Ref 'AWS::NoValue']
       Policies:
       - PolicyName: draininstance
         PolicyDocument:
